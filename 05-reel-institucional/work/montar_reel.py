@@ -20,10 +20,12 @@ WORK = Path(r"C:\tmp\videos-reels\05-reel-institucional\work")
 OUT_RAW = WORK / "reel_v2_bruto.mp4"
 OUT_FINAL = Path(r"C:\tmp\videos-reels\05-reel-institucional\reel_v1.mp4")
 
-# (arquivo, inicio, fim) em segundos - mais folga nas pontas que a v1
+# cada item e uma cena. Uma cena pode ser um unico (arquivo, inicio, fim),
+# ou uma LISTA de sub-trechos do mesmo plano continuo, unidos por CORTE
+# SECO (sem dissolve) - usado quando so precisamos tirar um pedaco do
+# meio de uma cena, sem criar uma transicao onde nao existe troca de cena.
 CLIPES = [
-    ("1.mp4", 1.05, 4.85),
-    ("1.mp4", 5.85, 6.55),
+    [("1.mp4", 1.05, 4.85), ("1.mp4", 5.85, 6.55)],  # corte seco: tira o trecho de desligar a camera
     ("2.mp4", 0.55, 7.00),
     ("3.mp4", 0.65, 5.50),
     ("4.mp4", 1.60, 7.20),
@@ -41,7 +43,7 @@ VIDEO_FILTER = "scale=1080:1920,eq=contrast=1.06:saturation=1.08:brightness=0.01
 AUDIO_FINAL_FILTER = "highpass=f=90,afftdn=nr=12:nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11"
 
 
-def processar_clipe(nome: str, inicio: float, fim: float, indice: int) -> Path:
+def processar_clipe(nome: str, inicio: float, fim: float, indice: str) -> Path:
     origem = SRC / nome
     destino = WORK / f"proc_{indice}.mp4"
     duracao = fim - inicio
@@ -51,6 +53,23 @@ def processar_clipe(nome: str, inicio: float, fim: float, indice: int) -> Path:
         "-vf", VIDEO_FILTER,
         "-af", "asetpts=PTS-STARTPTS",
         "-r", "30",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+        "-c:a", "aac", "-b:a", "192k",
+        str(destino),
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+    return destino
+
+
+def unir_com_corte_seco(sub_clipes: list[Path], destino: Path) -> Path:
+    """Concatena sub-clipes do MESMO plano com corte seco (sem dissolve)."""
+    lista_txt = destino.with_suffix(".txt")
+    lista_txt.write_text(
+        "\n".join(f"file '{p.as_posix()}'" for p in sub_clipes), encoding="utf-8"
+    )
+    cmd = [
+        FFMPEG, "-y",
+        "-f", "concat", "-safe", "0", "-i", str(lista_txt),
         "-c:v", "libx264", "-preset", "medium", "-crf", "18",
         "-c:a", "aac", "-b:a", "192k",
         str(destino),
@@ -150,11 +169,23 @@ def main() -> None:
 
     processados = [intro_clip]
     duracoes = [INTRO_DUR]
-    for i, (nome, ini, fim) in enumerate(CLIPES, start=1):
-        p = processar_clipe(nome, ini, fim, i)
-        processados.append(p)
-        duracoes.append(fim - ini)
-        print(f"processado {nome}: {fim - ini:.2f}s")
+    for i, cena in enumerate(CLIPES, start=1):
+        if isinstance(cena, tuple):
+            cena = [cena]
+        sub_clipes = []
+        duracao_total = 0.0
+        for j, (nome, ini, fim) in enumerate(cena):
+            p = processar_clipe(nome, ini, fim, f"{i}_{j}")
+            sub_clipes.append(p)
+            duracao_total += fim - ini
+            print(f"processado {nome} [{ini}-{fim}]: {fim - ini:.2f}s")
+
+        if len(sub_clipes) > 1:
+            unido = unir_com_corte_seco(sub_clipes, WORK / f"cena_{i}.mp4")
+            processados.append(unido)
+        else:
+            processados.append(sub_clipes[0])
+        duracoes.append(duracao_total)
 
     processados.append(outro_clip)
     duracoes.append(OUTRO_DUR)
