@@ -22,7 +22,8 @@ OUT_FINAL = Path(r"C:\tmp\videos-reels\05-reel-institucional\reel_v1.mp4")
 
 # (arquivo, inicio, fim) em segundos - mais folga nas pontas que a v1
 CLIPES = [
-    ("1.mp4", 1.05, 6.55),
+    ("1.mp4", 1.05, 4.85),
+    ("1.mp4", 5.85, 6.55),
     ("2.mp4", 0.55, 7.00),
     ("3.mp4", 0.65, 5.50),
     ("4.mp4", 1.60, 7.20),
