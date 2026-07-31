@@ -20,5 +20,20 @@ Reel sobre o direito (ou não) à folga em dia de jogo da Seleção, com base na
 | `reel_v2_24s.mp4` | 24s | Padrão visual oficial (logo + ritmo de leitura) |
 | `reel_v3_24s_musica.mp4` | 24s | Padrão + trilha sonora institucional |
 
+### 05 — Reel institucional (edição de vídeo real, não animado)
+Primeiro reel editado a partir de gravação real da Dra. Letícia (falando
+direto pra câmera), não gerado por template animado. Pipeline em
+`05-reel-institucional/work/montar_reel.py` (ffmpeg): corte de
+silêncio/sobra no início e fim de cada cena, remoção de ruído de fundo,
+normalização de volume, correção leve de cor/contraste, transições em
+dissolve suave (0,35s) entre as 7 cenas, abertura e fechamento com a
+identidade oficial (selo dourado + Letícia Barros + OAB/ES 39.948),
+formato nativo vertical 1080×1920.
+
+| Arquivo | Duração | Observação |
+|---------|---------|------------|
+| `05-reel-institucional/reel_v1.mp4` | 42s | 7 cenas, brutos em `Downloads/videos Leticia` |
+
 ---
-Produzido com ExpxAgents — Squad Editor de Vídeo.
+Reels 01-04 produzidos com ExpxAgents — Squad Editor de Vídeo.
+Reel 05 em diante: edição real via ffmpeg, script neste repositório.
