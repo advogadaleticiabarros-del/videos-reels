@@ -1,5 +1,12 @@
-"""Monta o reel institucional a partir dos brutos, com corte de silêncio,
-tratamento de áudio/cor, transições suaves e abertura/fechamento de marca.
+"""Monta o reel institucional a partir dos brutos.
+
+v2: corrige o desencontro de áudio/vídeo da v1 (o tratamento de áudio por
+cena, antes da concatenação, ia acumulando um pequeno atraso a cada
+transição). Agora cada cena só é cortada e tem o PTS resetado; o
+tratamento de áudio (ruído, volume) roda uma vez só, no vídeo inteiro já
+montado. Cortes com mais folga nas pontas pra não cortar fala. Adiciona
+a identificação (avatar + @adv.leticiabarros2) como marca-d'água durante
+a parte falada, no mesmo padrão da skill de criativo pergunta.
 """
 import subprocess
 from pathlib import Path
@@ -10,27 +17,27 @@ FFMPEG = (
 )
 SRC = Path(r"C:\Users\prosy\Downloads\videos Leticia")
 WORK = Path(r"C:\tmp\videos-reels\05-reel-institucional\work")
+OUT_RAW = WORK / "reel_v2_bruto.mp4"
 OUT_FINAL = Path(r"C:\tmp\videos-reels\05-reel-institucional\reel_v1.mp4")
 
-# (arquivo, inicio, fim) em segundos - cortando silencio de abertura/fechamento
+# (arquivo, inicio, fim) em segundos - mais folga nas pontas que a v1
 CLIPES = [
-    ("1.mp4", 1.20, 6.35),
-    ("2.mp4", 0.60, 6.30),
-    ("3.mp4", 0.70, 5.30),
-    ("4.mp4", 1.70, 7.05),
-    ("5.mp4", 1.00, 9.85),
-    ("6.mp4", 0.00, 7.20),
-    ("7.mp4", 1.15, 5.55),
+    ("1.mp4", 1.05, 6.55),
+    ("2.mp4", 0.55, 7.00),
+    ("3.mp4", 0.65, 5.50),
+    ("4.mp4", 1.60, 7.20),
+    ("5.mp4", 0.90, 10.00),
+    ("6.mp4", 0.00, 7.35),
+    ("7.mp4", 1.05, 5.75),
 ]
 
-XFADE = 0.35  # transicao suave e sutil, em segundos
+XFADE = 0.4  # transicao suave e sutil, em segundos
 INTRO_DUR = 1.6
 OUTRO_DUR = 2.2
 
-# eq leve: um pouco mais de contraste e saturacao, tom levemente mais quente
-VIDEO_FILTER = "scale=1080:1920,eq=contrast=1.06:saturation=1.08:brightness=0.01"
-# audio: corta grave abaixo de 90Hz, remove ruido de fundo, normaliza volume
-AUDIO_FILTER = "highpass=f=90,afftdn=nr=12:nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11"
+VIDEO_FILTER = "scale=1080:1920,eq=contrast=1.06:saturation=1.08:brightness=0.01,setpts=PTS-STARTPTS"
+# audio tratado uma vez so, depois de concatenado (ver concatenar_com_transicoes)
+AUDIO_FINAL_FILTER = "highpass=f=90,afftdn=nr=12:nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11"
 
 
 def processar_clipe(nome: str, inicio: float, fim: float, indice: int) -> Path:
@@ -41,7 +48,7 @@ def processar_clipe(nome: str, inicio: float, fim: float, indice: int) -> Path:
         FFMPEG, "-y",
         "-ss", str(inicio), "-i", str(origem), "-t", str(duracao),
         "-vf", VIDEO_FILTER,
-        "-af", AUDIO_FILTER,
+        "-af", "asetpts=PTS-STARTPTS",
         "-r", "30",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18",
         "-c:a", "aac", "-b:a", "192k",
@@ -68,7 +75,10 @@ def imagem_para_clipe(imagem: Path, duracao: float, destino: Path) -> Path:
     return destino
 
 
-def concatenar_com_transicoes(clipes: list[Path], durs: list[float]) -> None:
+def concatenar_com_transicoes(clipes: list[Path], durs: list[float]) -> tuple[float, float]:
+    """Concatena com xfade/acrossfade. Retorna (inicio_fala, fim_fala) em
+    segundos no timeline final, pra saber onde ligar a marca d'água.
+    """
     inputs = []
     for c in clipes:
         inputs += ["-i", str(c)]
@@ -77,9 +87,12 @@ def concatenar_com_transicoes(clipes: list[Path], durs: list[float]) -> None:
     filtro = []
     acumulado = durs[0]
     v_prev, a_prev = "0:v", "0:a"
+    inicio_fala = durs[0] - XFADE  # fala comeca quando a 1a cena (indice 1) entra
 
     for i in range(1, n):
         offset = acumulado - XFADE
+        if i == 1:
+            inicio_fala = offset
         v_out = f"v{i}"
         a_out = f"a{i}"
         filtro.append(
@@ -91,6 +104,8 @@ def concatenar_com_transicoes(clipes: list[Path], durs: list[float]) -> None:
         v_prev, a_prev = v_out, a_out
         acumulado += durs[i] - XFADE
 
+    fim_fala = acumulado - (durs[-1] - XFADE) - XFADE  # onde comeca o outro
+
     filtro_str = ";".join(filtro)
     cmd = [
         FFMPEG, "-y",
@@ -98,7 +113,29 @@ def concatenar_com_transicoes(clipes: list[Path], durs: list[float]) -> None:
         "-filter_complex", filtro_str,
         "-map", f"[{v_prev}]", "-map", f"[{a_prev}]",
         "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-        "-c:a", "aac", "-b:a", "192k",
+        "-c:a", "pcm_s16le",
+        str(OUT_RAW),
+    ]
+    subprocess.run(cmd, check=True)
+    return inicio_fala, fim_fala
+
+
+def aplicar_audio_e_marca_dagua(inicio_fala: float, fim_fala: float) -> None:
+    identificacao = WORK / "identificacao.png"
+    cmd = [
+        FFMPEG, "-y",
+        "-i", str(OUT_RAW),
+        "-i", str(identificacao),
+        "-filter_complex",
+        (
+            f"[1:v]format=rgba[wm];"
+            f"[0:v][wm]overlay=x=48:y=1920-h-140:enable='between(t,{inicio_fala:.3f},{fim_fala:.3f})'[vout];"
+            f"[0:a]{AUDIO_FINAL_FILTER}[aout]"
+        ),
+        "-map", "[vout]", "-map", "[aout]",
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", "slow", "-crf", "24", "-maxrate", "6M", "-bufsize", "12M",
+        "-c:a", "aac", "-b:a", "128k",
         str(OUT_FINAL),
     ]
     subprocess.run(cmd, check=True)
@@ -121,7 +158,10 @@ def main() -> None:
     processados.append(outro_clip)
     duracoes.append(OUTRO_DUR)
 
-    concatenar_com_transicoes(processados, duracoes)
+    inicio_fala, fim_fala = concatenar_com_transicoes(processados, duracoes)
+    print(f"marca d'agua entre {inicio_fala:.2f}s e {fim_fala:.2f}s")
+
+    aplicar_audio_e_marca_dagua(inicio_fala, fim_fala)
     print("Reel final em", OUT_FINAL)
 
 
