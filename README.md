@@ -34,6 +34,26 @@ formato nativo vertical 1080×1920.
 |---------|---------|------------|
 | `05-reel-institucional/reel_v1.mp4` | 42s | 7 cenas, brutos em `Downloads/videos Leticia` |
 
+### 06 — Trabalhista: "3 erros que fazem você perder direitos na demissão"
+Reel de montagem (texto cinético, sem gravação), no padrão dourado/preto
+oficial. Pipeline reutilizável em `montar_reel_montagem.py` (raiz do
+repo): renderiza cenas via Playwright a partir de `work/scene.html`,
+monta com ffmpeg (dissolve 0,4s entre cenas). Sem áudio — pensado pra
+usar áudio em alta do próprio Instagram na hora de postar.
+
+| Arquivo | Duração | Observação |
+|---------|---------|------------|
+| `06-reel-3-erros-demissao/reel.mp4` | 20s | 5 cenas, sem áudio |
+
+### 07 — Trabalhista: "Assédio moral: 3 sinais que ninguém te conta"
+Mesmo pipeline de montagem do #06.
+
+| Arquivo | Duração | Observação |
+|---------|---------|------------|
+| `07-reel-assedio-moral-sinais/reel.mp4` | 20s | 5 cenas, sem áudio |
+
 ---
 Reels 01-04 produzidos com ExpxAgents — Squad Editor de Vídeo.
 Reel 05 em diante: edição real via ffmpeg, script neste repositório.
+Reels 06-07: montagem 100% nossa (`montar_reel_montagem.py`), sem
+depender de gravação — usar quando não houver vídeo bruto disponível.
