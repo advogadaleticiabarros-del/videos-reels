@@ -32,8 +32,11 @@ def ff(*args) -> None:
 
 
 # --------------------------------------------------------------------------- palavras e legenda
-def palavras_do_reel(trechos):
-    r = json.loads((AQUI / "transcricao.json").read_text(encoding="utf-8"))
+def palavras_do_reel(trechos, reel=None):
+    reel = reel or {}
+    corrige = {**CFG["corrige"], **reel.get("corrige", {})}
+    destaques = CFG["destaques"] | set(reel.get("destaques", ()))
+    r = json.loads(Path(reel.get("transcricao", AQUI / "transcricao.json")).read_text(encoding="utf-8"))
     todas = [w for s in r["segments"] for w in s["words"]]
     t, linha, ws = 0.0, [], []
     for a, b in trechos:
@@ -41,10 +44,10 @@ def palavras_do_reel(trechos):
         linha.append({"ini_src": a, "fim_src": b, "ini": t, "fim": t + dur})
         for w in todas:
             if w["start"] >= a - 0.05 and w["start"] < b - 0.03 and w["end"] <= b + 0.15:
-                txt = CFG["corrige"].get(w["word"].strip(), w["word"].strip())
+                txt = corrige.get(f'{w["word"].strip()}@{w["start"]:.2f}', corrige.get(w["word"].strip(), w["word"].strip()))
                 if txt:
                     ws.append({"t": txt, "a": round(t + max(0, w["start"] - a), 3), "b": round(t + min(b, w["end"]) - a, 3),
-                               "d": txt.lower().strip(".,?!“”") in CFG["destaques"]})
+                               "d": txt.lower().strip(".,?!“”") in destaques})
         t += dur
     return linha, ws, t
 
@@ -62,11 +65,12 @@ def blocos(ws, cortes):
     return [{"a": b[0]["a"], "b": b[-1]["b"] + 0.3, "w": b} for b in saida]
 
 
-def energia(trechos, total):
+def energia(trechos, total, src=None):
     """Energia da voz por quadro (0..1) para a camada procedural reagir à narração."""
-    wav = CFG["src"].with_suffix(".wav")
+    src = Path(src or CFG["src"])
+    wav = src.with_suffix(".wav")
     if not wav.exists():
-        ff("-i", CFG["src"], "-vn", "-ac", "1", "-ar", "16000", wav)
+        ff("-i", src, "-vn", "-ac", "1", "-ar", "16000", wav)
     with wave.open(str(wav)) as f:
         sr = f.getframerate(); x = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).astype(np.float32) / 32768
     jan, ev = sr // FPS, []
@@ -123,7 +127,7 @@ def audio(reel, pasta: Path, eventos, total: float, efeitos: dict):
     for i, (a, b) in enumerate(reel["trechos"]):
         d = round(b - a, 3)
         p = pasta / f"voz_{i}.wav"
-        ff("-ss", a, "-t", d, "-i", CFG["src"], "-vn", "-af", f"afade=t=in:d=0.03,afade=t=out:st={d - 0.05}:d=0.05,aresample=48000",
+        ff("-ss", a, "-t", d, "-i", reel.get("src", CFG["src"]), "-vn", "-af", f"afade=t=in:d=0.03,afade=t=out:st={d - 0.05}:d=0.05,aresample=48000",
            "-ac", "2", p)
         partes.append(p)
     lista = pasta / "voz.txt"
@@ -272,7 +276,7 @@ def no(rotulo, at, x, top=700, sub=""):
             "at": at, "anim": "pop", "style": {"top": f"{top - 13}px", "left": f"{x - 120}px", "width": "240px"}}
 
 
-def outro(a, proxima, publico="quem precisa saber", gestante=False):
+def outro(a, proxima, publico="quem precisa saber", gestante=False, area="Direito Trabalhista"):
     """Fechamento: logo formado por pó de ouro, pedido de envio (sends), próxima parte, CTA OAB, assinatura.
     Tudo entre y=360 e y=1240 (área limpa do Reels)."""
     els = [
@@ -285,7 +289,7 @@ def outro(a, proxima, publico="quem precisa saber", gestante=False):
     if gestante:
         els.append(texto("Dra. Letícia Barros,|a advogada da <em>Gestante trabalhadora</em>", a + 1.15, 1015, size=44, align="center", anim="sobe"))
     else:
-        els.append(texto("Dra. Letícia Barros|<em>Direito Trabalhista</em>", a + 1.15, 1015, size=44, align="center", anim="sobe"))
+        els.append(texto(f"Dra. Letícia Barros|<em>{area}</em>", a + 1.15, 1015, size=44, align="center", anim="sobe"))
     els.append({"html": "OAB/ES 39.948 · @adv.leticiabarros2", "cls": "kick", "at": a + 1.3, "anim": "sobe",
                 "style": {"top": "1140px", "left": "0", "right": "0", "textAlign": "center"}})
     return {"a": a, "trans": "tinta", "particulas": 18, "outro": True, "els": els}
@@ -294,7 +298,7 @@ def outro(a, proxima, publico="quem precisa saber", gestante=False):
 # --------------------------------------------------------------------------- montagem
 def montar_cfg(n: int, REELS: dict):
     reel = REELS[n]
-    linha, ws, fala = palavras_do_reel(reel["trechos"])
+    linha, ws, fala = palavras_do_reel(reel["trechos"], reel)
     seg = [tr["ini"] for tr in linha]
 
     def W(txt, depois=-1.0):
@@ -337,8 +341,9 @@ def montar_cfg(n: int, REELS: dict):
     eventos.append(((oc["a"] if oc else fala) + .2, "brilho"))
     flashes = [c["a"] for c in cenas if c["trans"] == "corte" and c["a"] > 0]
     sem_leg = oc["a"] if oc else fala
-    cfg = {"serie": f"{CFG['serie']} · {n}/{len(REELS)}", "total": total, "cenas": cenas, "leg": blocos(ws, seg[1:]),
-           "flashes": flashes, "semLegenda": [[sem_leg, total + 1]], "energia": energia(reel["trechos"], total),
+    rotulo = reel.get("serie") or f"{CFG['serie']} · {n}/{len(REELS)}"
+    cfg = {"serie": rotulo, "total": total, "cenas": cenas, "leg": blocos(ws, seg[1:]),
+           "flashes": flashes, "semLegenda": [[sem_leg, total + 1], *reel.get("sem_legenda", [])], "energia": energia(reel["trechos"], total, reel.get("src")),
            "bursts": bursts, "punches": socos, "poeira": reel.get("poeira", 200)}
     (AQUI / f"cfg_r{n}.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
     return cfg, sorted(eventos)
@@ -396,9 +401,9 @@ async def renderizar(n, cfg, so_amostras=None, checar=False):
     return pasta
 
 
-def codificar(n, pasta, total, com, sem, prefixo="reel"):
-    saidas = []
-    for audio_, nome in [(com, f"{prefixo}{n}.mp4"), (sem, f"{prefixo}{n}_sem_musica.mp4")]:
+def codificar(n, pasta, total, com, sem, prefixo="reel", nome=None):
+    saidas, base = [], nome or f"{prefixo}{n}"
+    for audio_, nome in [(com, f"{base}.mp4"), (sem, f"{base}_sem_musica.mp4")]:
         destino = AQUI.parent / nome
         ff("-framerate", FPS, "-i", pasta / "%05d.jpg", "-i", audio_, "-map", "0:v", "-map", "1:a", "-t", total,
            "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p", "-profile:v", "high", "-r", FPS,
@@ -422,7 +427,9 @@ async def principal(REELS: dict, numeros, modo: str):
                 print("  INVADE", pb)
             continue
         if modo == "amostras":
-            ts = [float(x) for x in os.environ.get("TS", "").split(",") if x] or [c["a"] + 1.2 for c in cfg["cenas"]]
+            cs = cfg["cenas"]
+            ts = [float(x) for x in os.environ.get("TS", "").split(",") if x] or [
+                round(c["a"] + 0.7 * ((cs[i + 1]["a"] if i + 1 < len(cs) else cfg["total"]) - c["a"]), 2) for i, c in enumerate(cs)]
             await renderizar(n, cfg, ts)
             print("amostras r", n, [round(t, 2) for t in ts])
             continue
@@ -430,7 +437,7 @@ async def principal(REELS: dict, numeros, modo: str):
         pasta_audio.mkdir(exist_ok=True)
         com, sem = audio(REELS[n], pasta_audio, eventos, cfg["total"], efeitos)
         pasta = await renderizar(n, cfg)
-        print("ok", codificar(n, pasta, cfg["total"], com, sem, REELS[n].get("prefixo", "reel")), flush=True)
+        print("ok", codificar(n, pasta, cfg["total"], com, sem, REELS[n].get("prefixo", "reel"), REELS[n].get("nome")), flush=True)
 
 
 def rodar(REELS: dict, argv):
