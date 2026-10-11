@@ -4,13 +4,18 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 html { font-variant-numeric: lining-nums; font-feature-settings:"lnum" 1; }
 body { width:1080px; height:1920px; overflow:hidden; background:#1A1511; font-family:'Inter',sans-serif; color:#FAF6F0; }
+#palco { position:absolute; inset:0; }
 .cena { position:absolute; inset:0; overflow:hidden; will-change:transform, opacity, filter; }
 .bg { position:absolute; inset:-4%; width:108%; height:108%; object-fit:cover; transform-origin:50% 50%; }
 .veu { position:absolute; inset:0; }
 .camada { position:absolute; inset:0; transform-origin:50% 45%; }
 .el { position:absolute; }
 .cg { font-family:'EB Garamond',serif; }
-em { font-style:italic; color:#E2C77F; }
+em, .ouro { font-style:italic; color:#E2C77F; background:linear-gradient(100deg,#B8943F 0%,#E2C77F 30%,#FFF4D2 46%,#E9D398 54%,#C9A962 75%,#B8943F 100%);
+  background-size:260% 100%; background-position:var(--sh,50%) 0; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  text-shadow:none; filter:drop-shadow(0 6px 18px rgba(0,0,0,.55)); padding:0 .04em; }
+.ouro { font-style:normal; }
+#fx { position:absolute; inset:0; z-index:36; pointer-events:none; }
 .lin { display:block; overflow:hidden; padding:0.04em 0.06em 0.12em; margin:-0.04em -0.06em -0.12em; }
 .lin > span { display:inline-block; will-change:transform; }
 .w { display:inline-block; will-change:transform, opacity; }
@@ -40,6 +45,7 @@ em { font-style:italic; color:#E2C77F; }
 </style></head><body>
 <div id="palco"></div>
 <div id="flash"></div>
+<canvas id="fx" width="1080" height="1920"></canvas>
 <div id="cab"><span id="cabE">Letícia Barros · Advocacia</span><span class="d" id="cabD"></span></div>
 <div id="barra"><i></i></div>
 <div id="leg"></div>
@@ -90,6 +96,7 @@ async function init(cfg) {
     c._els = (c.els || []).map(d => {
       let n;
       if (d.tipo === 'texto') n = montarTexto(cam, d);
+      else if (d.tipo === 'po') { n = el('div', 'el'); n.style.display = 'none'; }
       else { n = el('div', 'el ' + (d.cls || ''), d.html || ''); Object.assign(n.style, d.style || {}); }
       cam.appendChild(n);
       if (d.tipo === 'traco') n.querySelectorAll('.desenha').forEach(p => { let L = 1200; try { L = p.getTotalLength(); } catch (e) {} p.style.strokeDasharray = L; p.style.strokeDashoffset = L; p._L = L; });
@@ -98,6 +105,11 @@ async function init(cfg) {
     palco.appendChild(div); c._div = div;
   });
   await Promise.all(cfg.cenas.filter(c => c._img && c._img.src).map(c => c._img.decode().catch(() => {})));
+  await document.fonts.load("700 100px 'EB Garamond'");
+  for (const c of cfg.cenas) for (const [n, d] of c._els) if (d.tipo === 'po') {
+    if (d.img) { d._im = new Image(); d._im.src = d.img; await d._im.decode().catch(() => {}); }
+    pontosDe(d);
+  }
   // títulos: cada linha (separada por |) tem que caber numa linha só; senão a fonte reduz até caber
   for (const c of cfg.cenas) {
     c._div.style.visibility = 'visible';
@@ -166,6 +178,8 @@ function transicao(c, t) {
     case 'zoom':   tf = `scale(${lerp(1.5, 1, kk)})`; op = kk; fl = `blur(${(1 - kk) * 18}px)`; break;
     case 'iris':   clip = `circle(${lerp(0, 120, kk)}% at 50% ${c.irisY ?? 45}%)`; break;
     case 'sobe':   tf = `translateY(${(1 - kk) * 700}px)`; op = kk; break;
+    case 'tinta':  break;
+    case 'luz':    op = clamp(kk * 1.6); break;
     case 'dissolve': default: op = kk; break;
   }
   return { tf, op, fl, clip };
@@ -186,6 +200,13 @@ function saida(c, prox, t) {
 async function render(t) {
   const promessas = [];
   document.querySelector('#barra i').style.width = (100 * clamp(t / C.total)) + '%';
+  const E = energia(t);
+  document.querySelector('#barra i').style.boxShadow = `0 0 ${8 + 26 * E}px rgba(233,211,152,${.35 + .6 * E})`;
+  document.documentElement.style.setProperty('--sh', (130 - ((t % 3.2) / 3.2) * 160) + '%');
+  const palco = document.getElementById('palco'); palco.style.transformOrigin = '50% 42%'; palco.style.transform = `scale(${soco(t)})`;
+  g.clearRect(0, 0, 1080, 1920); g.globalCompositeOperation = 'lighter';
+  poeira(t, E);
+  const trFx = [];
   // flash nos pontos marcados
   const f = C.flashes.reduce((m, x) => (t >= x && t - x < m ? t - x : m), 9);
   document.getElementById('flash').style.opacity = f < .16 ? .55 * (1 - f / .16) : 0;
@@ -208,29 +229,37 @@ async function render(t) {
       }
     }
     // câmera da camada gráfica (push-in suave + deriva) e parallax das partículas
-    const cam = c.cam || [1, 1.05, 0, 0];
+    const cam = c.cam || [1, 1.03, 0, 0];
     const ck = eInOut(p);
     c._cam.style.transform = `translate(${lerp(cam[2], cam[3], ck)}px, 0) scale(${lerp(cam[0], cam[1], ck)})`;
     c._ps.forEach(([pe, ps]) => {
       const y = ps.y - lt * 26 * ps.z, x = ps.x + Math.sin(lt * .7 + ps.x) * 18 * ps.z + lerp(cam[2], cam[3], ck) * ps.z * 1.8;
       pe.style.transform = `translate(${x}px, ${((y % 1500) + 1500) % 1500 + 200}px)`;
     });
-    c._els.forEach(([n, d]) => animarEl(n, d, t));
+    c._els.forEach(([n, d]) => { if (d.tipo === 'po') trFx.push([d, c]); else animarEl(n, d, t); });
     // transições
     const tr = transicao(c, t);
     const sa = saida(c, prox, t);
     let tf = tr.tf, fl = tr.fl, op = tr.op;
     if (sa) { tf = (tf + ' ' + sa[0]).trim(); fl = (fl + ' ' + sa[1]).trim(); }
     c._div.style.transform = tf; c._div.style.filter = fl; c._div.style.opacity = op; c._div.style.clipPath = tr.clip;
+    const kt = (t - c.a) / (c.tdur ?? T);
+    if (c.trans === 'tinta' && kt < 1) promessas.push(tinta(c, clamp(kt)));
+    else if (c._div.style.maskImage) { c._div.style.maskImage = c._div.style.webkitMaskImage = ''; }
+    if (c.trans === 'luz' && kt >= 0 && kt < 1) luz(kt);
   });
-  // legenda por frase, palavra falada em destaque
-  const ib = C.leg.findIndex(b => t >= b.a - .05 && t < b.b);
+  for (const [d, c] of trFx) desenharPo(d, t, parseFloat(c._div.style.opacity || 1));
+  explosoes(t);
+  g.globalCompositeOperation = 'source-over';
+  // legenda por frase (adianta ~0,12 s da voz), palavra falada em destaque
+  const ib = C.leg.findIndex(b => t >= b.a - .12 && t < b.b);
   const leg = document.getElementById('leg');
   const semLeg = C.semLegenda.some(([a, b]) => t >= a && t < b);
   leg.style.opacity = semLeg ? 0 : 1;
   if (ib !== blocoAtual) { blocoAtual = ib; leg.innerHTML = ib < 0 ? '' : C.leg[ib].w.map(w => `<span class="w${w.d ? ' d' : ''}">${w.t}</span>`).join(''); }
-  if (ib >= 0) C.leg[ib].w.forEach((w, i) => { const s = leg.children[i]; s.classList.toggle('dita', t >= w.a); s.classList.toggle('on', t >= w.a && t < w.b + .05);
-    const kk = eOut((t - w.a) / .18); s.style.transform = `translateY(${(1 - kk) * 10}px)`; });
+  if (ib >= 0) C.leg[ib].w.forEach((w, i) => { const s = leg.children[i]; s.classList.toggle('dita', t >= w.a - .1); s.classList.toggle('on', t >= w.a - .1 && t < w.b + .05);
+    const kk = eOut((t - w.a + .1) / .18); s.style.transform = `translateY(${(1 - kk) * 10}px)`; });
   await Promise.all(promessas);
 }
-</script></body></html>
+</script>
+<script src="fx.js"></script></body></html>

@@ -52,8 +52,48 @@ Mesmo pipeline de montagem do #06.
 |---------|---------|------------|
 | `07-reel-assedio-moral-sinais/reel.mp4` | 20s | 5 cenas, sem áudio |
 
+### 10 — Gestante CLT: "Engravidou durante o aviso prévio? Isso muda alguma coisa"
+Reel genérico do calendário 17/08 (dia de artigo + carrossel + pergunta +
+reel), mesmo pipeline de montagem do #06/#07 — sem gravação da Letícia,
+cenas de texto cinético. Conteúdo: estabilidade começa na confirmação da
+gravidez (não na assinatura de papel), vale mesmo com aviso prévio já
+comunicado, proteção até 5 meses após o parto.
+
+| Arquivo | Duração | Observação |
+|---------|---------|------------|
+| `10-reel-gestante-aviso-previo/reel.mp4` | ~19,7s | 5 cenas, sem áudio |
+
+### 11 — Gestante CLT: mesmo tema do #10, versão com b-roll real (Pexels)
+Segunda versão do reel de 17/08, produzida pela squad ExpxAgents
+`marketing/redes-sociais/reels/reel-generico` (Camila Duarte → Rafael
+Nogueira → Bruno Aragão). Diferente do #10 (fundo sólido dourado/preto),
+aqui o fundo de cada cena é um clipe de vídeo real buscado na API do
+Pexels (mulher grávida em ambiente doméstico/escritório, advogada de
+terno), com gradiente de escurecimento (scrim) por baixo do texto pra
+garantir legibilidade. Pipeline em `11-reel-broll-aviso-previo/work/gerar.py`.
+
+| Arquivo | Duração | Observação |
+|---------|---------|------------|
+| `11-reel-broll-aviso-previo/reel.mp4` | ~19,8s | 5 cenas, b-roll Pexels, sem áudio |
+
 ---
 Reels 01-04 produzidos com ExpxAgents — Squad Editor de Vídeo.
 Reel 05 em diante: edição real via ffmpeg, script neste repositório.
 Reels 06-07: montagem 100% nossa (`montar_reel_montagem.py`), sem
 depender de gravação — usar quando não houver vídeo bruto disponível.
+Reel 11 em diante (reels genéricos com b-roll): squad ExpxAgents
+`marketing/redes-sociais/reels/reel-generico`, busca automática de b-roll
+via API do Pexels + composição de texto sobre vídeo (não sobre fundo
+sólido).
+
+### 13 — Série "13º sem susto" (3 Reels) · motor v2 procedural (10/10/2026)
+Só o áudio do vídeo do NotebookLM ("O Guia Definitivo do Décimo Terceiro Para Trabalhadoras"). Primeira série no
+motor v2 (`_padrao-motion/`): pó de ouro que forma números e o logo, poeira dourada reativa à voz, explosões nos
+carimbos, soco nas palavras-chave, transições "tinta" e "luz", verificador automático da área limpa e da leitura.
+Pipeline: `13-reels-procedural/work/serie.py` (+ `motor.py`, `engine.html`, `fx.js`). Legendas em `LEGENDAS.md`.
+
+| Arquivo | Duração | Observação |
+|---------|---------|------------|
+| `13-reels-procedural/13-sem-susto-1.mp4` | ~25s | Prazos do 13º (03/11) |
+| `13-reels-procedural/13-sem-susto-2.mp4` | ~29s | 13º proporcional (05/11) |
+| `13-reels-procedural/13-sem-susto-3.mp4` | ~25s | Licença-maternidade e 13º (07/11) |

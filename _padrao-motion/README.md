@@ -1,6 +1,12 @@
-# Padrão oficial de Reels (motion design) — aprovado em 09/10/2026
+# Padrão oficial de Reels — motion v2 procedural (10/10/2026)
 
-Cópia congelada do motor da série "Direitos da gestante" (pasta 12). Para cada vídeo novo,
-copiar esta pasta para `NN-nome/work/` e seguir a skill `leticia-reels-motion`
-(`~/.claude/skills/leticia-reels-motion/SKILL.md`). Não alterar o visual: `engine.html` é o
-padrão; em `serie.py` mudam só os trechos de áudio, as cenas e os destaques.
+Base da série "13º sem susto" (pasta 13). Para cada vídeo novo, copiar esta pasta para `NN-nome/work/` e seguir a skill
+`leticia-reels-motion` (`~/.claude/skills/leticia-reels-motion/SKILL.md`).
+
+- `motor.py`: motor genérico (áudio, energia da voz, legenda, blocos, pó de ouro, verificador, render, codificação). Não muda por série.
+- `serie.py`: roteiro da série (CFG, trechos, cenas). É o único arquivo que muda.
+- `engine.html` + `fx.js`: visual e camada procedural (pó de ouro, explosões, soco, tinta, luz, verificador da área limpa).
+- `transcrever.py`: Whisper com marcação de palavras.
+
+Comandos: `py serie.py --checar` → `py serie.py 1 --amostras` → `py serie.py 1 2 3`.
+A versão anterior (v1, série "Direitos da gestante") está congelada em `../_padrao-motion-v1/`.
